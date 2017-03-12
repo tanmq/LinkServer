@@ -18,7 +18,7 @@ import (
 
 
 const (
-	MAX_EXPIRE_SEC = 30000
+	MAX_EXPIRE_SEC = 30
 )
 
 type TcpServer struct {
