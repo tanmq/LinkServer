@@ -1,5 +1,12 @@
 # linkServer
 
+###编译运行下载代码包到
+GOPATH的src目录下
+```
+go build
+./linkServer
+```
+
 ###配置模块和日志模块
 这两个模块是在别的开源项目源码中提取出来的
 
