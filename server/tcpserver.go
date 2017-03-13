@@ -33,7 +33,7 @@ func NewTcpServer() *TcpServer {
 }
 
 func (s *TcpServer)report() {
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Millisecond * 10)
 	go func() {
     for _ = range ticker.C {
         logger.Info("ticked at ", time.Now(), ". The size of sessions is ",  s.sessions.SessionSize())
@@ -74,11 +74,11 @@ func (s *TcpServer)ListenAndServe(port int)  error {
 func (s *TcpServer)handleLink(tcpConn *net.TCPConn) {
 
 	// 1s内需要收到登录包
-	tcpConn.SetDeadline(time.Now().Add(time.Second*10))
+	tcpConn.SetDeadline(time.Now().Add(time.Second))
 	logger.Info("Accept new Link!")
 
 	//build session
-	session, err := s.buildSession(tcpConn)
+	ss, err := s.buildSession(tcpConn)
 	if (err != nil) {
 		logger.Error("Error to build session. so connection is closing.", err)
 		tcpConn.Close()
@@ -103,8 +103,7 @@ func (s *TcpServer)handleLink(tcpConn *net.TCPConn) {
 	}
 
 	//clear connection and session
-	s.sessions.Del(session.Uid, session.Device)
-	tcpConn.Close()
+	s.sessions.Del(ss.Uid, ss.Device)
 }
 
 //处理数据包
@@ -116,6 +115,7 @@ func (s *TcpServer)dispatch(pack packet.Packet) {
 
 	 }
 }
+
 
 
 //build user session and join into sessionmap

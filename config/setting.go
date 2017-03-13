@@ -6,6 +6,7 @@ import (
 	"strconv"
 )
 
+var CF Configer //配置
 
 const (
 	CONFIG					string = "./config.ini"
@@ -46,7 +47,10 @@ func trySet(iniconf Configer) {
 	if v, e := iniconf.Int64("serverport"); v <= 0 || e != nil {
 		iniconf.Set("serverport", strconv.Itoa(serverport))
 	}
-
+	
 	iniconf.SaveConfigFile(CONFIG)
 }
 
+func init() {
+	CF = NewConfiger()
+}

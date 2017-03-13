@@ -14,61 +14,73 @@ const (
 )
 
 
-type seg struct{
+type segment struct{
   sync.RWMutex
   m map[string]*Session
 }
 
 type SessionMap struct {
-  segmap map[uint8]seg
+  segmap map[uint8]*segment
 }
 
 
-func newSeg() seg {
-  s := new(seg)
+func newSeg() *segment {
+  s := new(segment)
   s.m = make(map[string]*Session)
 
-  return *s
+  return s
 }
 
-func (s* seg) put(uid uint64, device packet.DeviceType, session *Session) {
+func (s* segment) put(uid uint64, device packet.DeviceType, ss *Session) {
   s.Lock()
   defer s.Unlock()
 
   key := hashItem(uid, device)
-  _,ok := s.m[key]
-  if ok {
-    delete(s.m, key)
-  }
+  s.closeSession(key) // close old one if exist
 
-  s.m[key] = session
+  s.m[key] = ss
 }
 
-func (s* seg)get(uid uint64, device packet.DeviceType) (*Session, error) {
+func (s *segment)size() int{
+  s.RLock()
+  defer s.RUnlock()
+
+  return len(s.m)
+}
+
+func (s* segment)get(uid uint64, device packet.DeviceType) (*Session, error) {
   s.RLock()
   defer s.RUnlock()
 
   key := hashItem(uid, device)
-  session, ok := s.m[key]
+  ss, ok := s.m[key]
   if ok {
-    return session, nil
+    return ss, nil
   }
 
-  return session, errors.New("Session does Exist")
+  return ss, errors.New("Session does Exist")
 }
 
-func (s* seg) remove(uid uint64, device packet.DeviceType) {
+//should be locked s.m by who calls
+func (s *segment)closeSession(key string) {
+  ss, ok := s.m[key]
+  if ok {
+    delete(s.m, key) 
+    ss.Close()
+  }
+}
+
+func (s* segment) remove(uid uint64, device packet.DeviceType) {
   s.Lock()
   defer s.Unlock()
 
   key := hashItem(uid, device)
-
-  delete(s.m, key)
+  s.closeSession(key)
 }
 
 func NewSessionMap() SessionMap {
   smap := SessionMap{}
-  smap.segmap = make(map[uint8]seg)
+  smap.segmap = make(map[uint8]*segment)
 
   //init for each segment
   for i := 0; i < segSize; i ++ {
@@ -79,11 +91,11 @@ func NewSessionMap() SessionMap {
   return smap
 }
 
-func (s *SessionMap)Put(uid uint64, device packet.DeviceType, session *Session) error {
+func (s *SessionMap)Put(uid uint64, device packet.DeviceType, ss *Session) error {
    skey := hashSeg(uid)
    seg, ok := s.segmap[skey]
    if ok {
-     seg.put(uid, device, session)
+     seg.put(uid, device, ss)
      return nil
    }
 
@@ -115,7 +127,7 @@ func (s *SessionMap)Del(uid uint64, device packet.DeviceType) bool {
 func (s *SessionMap)SessionSize() int {
    count := 0
    for _,smap := range s.segmap {
-     count += len(smap.m)
+     count += smap.size()
    }
 
    return count
@@ -123,14 +135,17 @@ func (s *SessionMap)SessionSize() int {
 
 
 //遍历所有session
+//这里会有个隐患，由于遍历需要加锁，如果处理不及时会导致加锁时间过长
 func (s *SessionMap)Iter() chan<- *Session {
   iter := make(chan *Session)
 
   go func ()  {
     for _, v := range s.segmap {
+      v.RLock() // should protect the segmap
       for _, session := range v.m {
         iter <- session
       }
+      v.RUnlock()
     }
 
      close(iter)// finished iter
