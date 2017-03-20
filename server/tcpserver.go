@@ -12,7 +12,7 @@ import (
 	"linkServer/logger"
 	"linkServer/session"
 	"linkServer/packet"
-	"linkServer/server/util"
+	"linkServer/common/util"
 )
 
 
@@ -103,7 +103,9 @@ func (s *TcpServer)handleLink(tcpConn *net.TCPConn) {
 	}
 
 	//clear connection and session
-	s.sessions.Del(ss.Uid, ss.Device)
+	if !ss.Closed {
+		s.sessions.Del(ss.Uid, ss.Device)
+	}
 }
 
 //处理数据包
@@ -143,8 +145,9 @@ func (s *TcpServer)buildSession(tcpConn *net.TCPConn) (ss *session.Session, err 
 
 
 	 //记录session信息
-	 ss = new(session.Session)
-	 ss.Uid = loginInfo.Uid
+	 ss 				= new(session.Session)
+	 ss.Uid 		= loginInfo.Uid
+	 ss.Closed 	= false
 	 switch packet.DeviceType(loginInfo.Device) {
 	 	case packet.APP:
 		 	ss.Device = packet.APP

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-  segSize = 16
+  segSize = 16  //cut sessionmap into 16 segment for low lock level.
 )
 
 
@@ -35,7 +35,7 @@ func (s* segment) put(uid uint64, device packet.DeviceType, ss *Session) {
   s.Lock()
   defer s.Unlock()
 
-  key := hashItem(uid, device)
+  key := buildSegmentKey(uid, device)
   s.closeSession(key) // close old one if exist
 
   s.m[key] = ss
@@ -52,7 +52,7 @@ func (s* segment)get(uid uint64, device packet.DeviceType) (*Session, error) {
   s.RLock()
   defer s.RUnlock()
 
-  key := hashItem(uid, device)
+  key := buildSegmentKey(uid, device)
   ss, ok := s.m[key]
   if ok {
     return ss, nil
@@ -65,8 +65,8 @@ func (s* segment)get(uid uint64, device packet.DeviceType) (*Session, error) {
 func (s *segment)closeSession(key string) {
   ss, ok := s.m[key]
   if ok {
-    delete(s.m, key) 
-    ss.Close()
+    delete(s.m, key)
+    ss.Close() // close tcp connection.
   }
 }
 
@@ -74,7 +74,7 @@ func (s* segment) remove(uid uint64, device packet.DeviceType) {
   s.Lock()
   defer s.Unlock()
 
-  key := hashItem(uid, device)
+  key := buildSegmentKey(uid, device)
   s.closeSession(key)
 }
 
@@ -92,7 +92,7 @@ func NewSessionMap() SessionMap {
 }
 
 func (s *SessionMap)Put(uid uint64, device packet.DeviceType, ss *Session) error {
-   skey := hashSeg(uid)
+   skey := buildSessionMapKey(uid)
    seg, ok := s.segmap[skey]
    if ok {
      seg.put(uid, device, ss)
@@ -104,7 +104,7 @@ func (s *SessionMap)Put(uid uint64, device packet.DeviceType, ss *Session) error
 }
 
 func (s *SessionMap)Get(uid uint64, device packet.DeviceType) (*Session, error) {
-  skey := hashSeg(uid)
+  skey := buildSessionMapKey(uid)
   seg, ok := s.segmap[skey]
   if !ok {
     logger.Warn("Segment is not exist  un expected. skey=%d", skey)
@@ -115,7 +115,7 @@ func (s *SessionMap)Get(uid uint64, device packet.DeviceType) (*Session, error) 
 }
 
 func (s *SessionMap)Del(uid uint64, device packet.DeviceType) bool {
-  skey := hashSeg(uid)
+  skey := buildSessionMapKey(uid)
   seg, ok := s.segmap[skey]
   if ok {
     seg.remove(uid, device)
@@ -142,8 +142,8 @@ func (s *SessionMap)Iter() chan<- *Session {
   go func ()  {
     for _, v := range s.segmap {
       v.RLock() // should protect the segmap
-      for _, session := range v.m {
-        iter <- session
+      for _, ss := range v.m {
+        iter <- ss
       }
       v.RUnlock()
     }
@@ -154,12 +154,10 @@ func (s *SessionMap)Iter() chan<- *Session {
   return iter
 }
 
-//hash function for SESSIONMAP
-func hashSeg(uid uint64) uint8 {
+func buildSessionMapKey(uid uint64) uint8 {
   return uint8(uid % segSize)
 }
 
-// hash fuction for SEGMAP
-func hashItem(uid uint64, device packet.DeviceType) string {
+func buildSegmentKey(uid uint64, device packet.DeviceType) string {
   return strconv.FormatUint(uid, 10) + "-" + strconv.Itoa(int(device))
 }

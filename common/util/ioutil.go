@@ -14,7 +14,7 @@ const (
 
 //数据格式开始四个byte表示data长度，后面跟随data信息。这里会接收一个完整的data包才会返回
 //或者读取出错也会返回，出错后会断开该链接
-func FixedLengthRead(conn *net.TCPConn) (data []byte, err error) {
+func FixedLengthRead(conn net.Conn) (data []byte, err error) {
   //start to read data length
   bufLen, err := readNBytes(conn, 4)
   if err != nil {
@@ -33,7 +33,7 @@ func FixedLengthRead(conn *net.TCPConn) (data []byte, err error) {
 }
 
 
-func readNBytes(conn *net.TCPConn, num uint32) (data []byte, err error) {
+func readNBytes(conn net.Conn, num uint32) (data []byte, err error) {
    data = make([]byte, 0, num)
    var nread  uint32    = 0
    var unread uint32    = num

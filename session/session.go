@@ -12,10 +12,12 @@ type Session struct {
   Device          packet.DeviceType
 
   Conn            *net.TCPConn // tcp connection
+  Closed          bool
 }
 
 
 //close tcp connection
 func (ss *Session)Close() {
   ss.Conn.Close()
+  ss.Closed = true
 }
