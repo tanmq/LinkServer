@@ -23,10 +23,9 @@ type NodeClient struct {
 }
 
 
-func NewNodeClient(address string ,sender MessageSender, receiver MessageReceiver, maxMessageLength uint32) *NodeClient {
+func NewNodeClient(address string ,sender MessageSender, receiver MessageReceiver) *NodeClient {
 	client := new(NodeClient)
 
-	client.maxmessagelength 	= maxMessageLength
 	client.sender						 	= sender
 	client.receiver				 		= receiver
 	client.address						= address
@@ -35,6 +34,10 @@ func NewNodeClient(address string ,sender MessageSender, receiver MessageReceive
 	client.connect()
 
 	return client
+}
+
+func (c *NodeClient)IsValid() {
+	return c.connected
 }
 
 

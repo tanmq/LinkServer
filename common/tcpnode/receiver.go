@@ -9,5 +9,5 @@ type MessageReceiver interface {
 	* data here is fixed length which means the first four bytes indicate
 	* how much the packet is and data exclude that four bytes.
 	*/
-	func OnMessage(data []byte)
+	OnMessage(data []byte)
 }
