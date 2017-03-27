@@ -1,56 +1,54 @@
 package server
 
-
 import (
-	"net"
-	"strconv"
-	"os"
-	"time"
 	"errors"
+	"net"
+	"os"
+	"strconv"
+	"time"
 
-
-	"linkServer/logger"
-	"linkServer/session"
-	"linkServer/packet"
 	"linkServer/common/util"
+	"linkServer/logger"
+	"linkServer/packet"
+	"linkServer/session"
 )
 
-
-
+//MaxExpireTime means heart beat expire time.
 const (
-	MAX_EXPIRE_SEC = 30
+	MaxExpireTime = 30
 )
 
-type TcpServer struct {
-	sessions session.SessionMap
+//TCPServer is for listen tcp and serves.
+type TCPServer struct {
+	sessions session.SSPool
 }
 
-
-func NewTcpServer() *TcpServer {
-	server := new(TcpServer)
-	server.sessions = session.NewSessionMap()
+//NewTCPServer is to build an new TCPServer
+func NewTCPServer() *TCPServer {
+	server := new(TCPServer)
+	server.sessions = session.NewSSPool()
 	return server
 }
 
-func (s *TcpServer)report() {
+//report the stat
+func (s *TCPServer) report() {
 	ticker := time.NewTicker(time.Millisecond * 10)
 	go func() {
-    for _ = range ticker.C {
-        logger.Info("ticked at ", time.Now(), ". The size of sessions is ",  s.sessions.SessionSize())
-    }
+		for _ = range ticker.C {
+			logger.Info("ticked at ", time.Now(), ". The size of sessions is ", s.sessions.PoolSize())
+		}
 	}()
 }
 
-
-
-func (s *TcpServer)ListenAndServe(port int)  error {
-  tcpAddr, err := net.ResolveTCPAddr("tcp", ":" + strconv.Itoa(port))
+//ListenAndServe will begin to listen and accept tcp connections.
+func (s *TCPServer) ListenAndServe(port int) error {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		panic("init tcp addr error")
 	}
 	l, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
-		logger.Error("Error to bind on port : %d", port)
+		logger.Error("Error to bind on port ", port)
 		os.Exit(-1)
 	}
 
@@ -69,9 +67,7 @@ func (s *TcpServer)ListenAndServe(port int)  error {
 	}
 }
 
-
-
-func (s *TcpServer)handleLink(tcpConn *net.TCPConn) {
+func (s *TCPServer) handleLink(tcpConn *net.TCPConn) {
 
 	// 1s内需要收到登录包
 	tcpConn.SetDeadline(time.Now().Add(time.Second))
@@ -79,7 +75,7 @@ func (s *TcpServer)handleLink(tcpConn *net.TCPConn) {
 
 	//build session
 	ss, err := s.buildSession(tcpConn)
-	if (err != nil) {
+	if err != nil {
 		logger.Error("Error to build session. so connection is closing.", err)
 		tcpConn.Close()
 		return
@@ -87,10 +83,10 @@ func (s *TcpServer)handleLink(tcpConn *net.TCPConn) {
 
 	//read data
 	//设置读时间超时30s，正常情况下30s内肯定会有心跳包的到达，如果有数据传输则代替心跳包
-	tcpConn.SetDeadline(time.Now().Add(time.Second * MAX_EXPIRE_SEC))
+	tcpConn.SetDeadline(time.Now().Add(time.Second * MaxExpireTime))
 	for {
 		data, err := util.FixedLengthRead(tcpConn)
-		if (err != nil) {
+		if err != nil {
 			logger.Error("something wrong to connection.", err)
 			break
 		}
@@ -104,62 +100,58 @@ func (s *TcpServer)handleLink(tcpConn *net.TCPConn) {
 
 	//clear connection and session
 	if !ss.Closed {
-		s.sessions.Del(ss.Uid, ss.Device)
+		s.sessions.Del(ss.UID, ss.Device)
 	}
 }
 
 //处理数据包
-func (s *TcpServer)dispatch(pack packet.Packet) {
-	 switch pack.Protocol {
-	 case packet.HEART_BEAT:
-		 return //ignore
+func (s *TCPServer) dispatch(pack packet.Packet) {
+	switch pack.Protocol {
+	case packet.HeartBeat:
+		return //ignore
 
-
-	 }
+	}
 }
 
-
-
 //build user session and join into sessionmap
-func (s *TcpServer)buildSession(tcpConn *net.TCPConn) (ss *session.Session, err error) {
-	 data, err := util.FixedLengthRead(tcpConn)
-	 if err != nil {
-		 return
-	 }
+func (s *TCPServer) buildSession(tcpConn *net.TCPConn) (ss *session.Session, err error) {
+	data, err := util.FixedLengthRead(tcpConn)
+	if err != nil {
+		return
+	}
 
-	 pack, err 		:= packet.NewPacket(data)
-	 if err != nil {
-		 	logger.Error("Cannot build packet.")
-		 	return
-	 }
-	 loginInfo, err := pack.ParseLoginInfo()
-	 if err != nil {
-		 return
-	 }
+	pack, err := packet.NewPacket(data)
+	if err != nil {
+		logger.Error("Cannot build packet.")
+		return
+	}
+	loginInfo, err := pack.ParseLoginInfo()
+	if err != nil {
+		return
+	}
 
-	 //登录验证
-	 if (!util.Auth(&loginInfo)) {
-		 err = errors.New("auth failed.")
-		 return
-	 }
+	//登录验证
+	if !util.Auth(&loginInfo) {
+		err = errors.New("auth failed")
+		return
+	}
 
+	//记录session信息
+	ss = new(session.Session)
+	ss.UID = loginInfo.Uid
+	ss.Closed = false
+	switch packet.DeviceType(loginInfo.Device) {
+	case packet.APP:
+		ss.Device = packet.APP
+	case packet.WEB:
+		ss.Device = packet.WEB
+	default:
+		ss.Device = packet.UNKNOW
+	}
+	ss.Conn = tcpConn
 
-	 //记录session信息
-	 ss 				= new(session.Session)
-	 ss.Uid 		= loginInfo.Uid
-	 ss.Closed 	= false
-	 switch packet.DeviceType(loginInfo.Device) {
-	 	case packet.APP:
-		 	ss.Device = packet.APP
-		case packet.WEB:
-			ss.Device = packet.WEB
-		default:
-			ss.Device = packet.UNKNOW
-	 }
-	 ss.Conn = tcpConn
+	// add to session list
+	s.sessions.Put(ss.UID, ss.Device, ss)
 
-	 // add to session list
-	 s.sessions.Put(ss.Uid, ss.Device, ss)
-
-	 return
+	return
 }

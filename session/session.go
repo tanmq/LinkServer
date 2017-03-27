@@ -1,23 +1,22 @@
 package session
 
 import (
-  "net"
+	"net"
 
-  "linkServer/packet"
+	"linkServer/packet"
 )
 
-
+//Session store user context.
 type Session struct {
-  Uid             uint64
-  Device          packet.DeviceType
+	UID    uint64
+	Device packet.DeviceType
 
-  Conn            *net.TCPConn // tcp connection
-  Closed          bool
+	Conn   *net.TCPConn // tcp connection
+	Closed bool
 }
 
-
-//close tcp connection
-func (ss *Session)Close() {
-  ss.Conn.Close()
-  ss.Closed = true
+//Close tcp connection
+func (ss *Session) Close() {
+	ss.Conn.Close()
+	ss.Closed = true
 }
