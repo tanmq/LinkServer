@@ -1,4 +1,4 @@
-#linkServer
+# linkServer
 
 ### 编译运行下载代码包到
 GOPATH的src目录下
