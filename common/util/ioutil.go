@@ -58,11 +58,8 @@ func readNBytes(conn net.Conn, num uint32) (data []byte, err error) {
 //FixedLengthWrite write fixedLength data to conn.
 func FixedLengthWrite(conn *net.TCPConn, data []byte) error {
 	datalen := uint32(len(data))
-	_, err := conn.Write(packet.Uint32ToBytes(datalen))
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Write(data)
+	bufData := packet.Uint32ToBytes(datalen)
+	bufData = append(bufData, data...)
+	_, err := conn.Write(bufData)
 	return err
 }
